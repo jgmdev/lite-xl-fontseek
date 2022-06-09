@@ -54,7 +54,7 @@ The following interface provides functionality to load multiple fonts:
 ---@param field string Name or idx where the font is stored
 ---@param fonts_list plugins.fontseek.font[] List of fonts to search and load
 ---@param size number Desired overall font size without SCALE applied
-function fontseek.set_fonts(t, field, fonts_list, size) end
+function fontseek.load(t, field, fonts_list, size) end
 ```
 
 ### Example Usage
