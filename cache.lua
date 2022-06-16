@@ -51,8 +51,10 @@ function FontCache:build()
     return
   end
 
+  local native_metadata = type(renderer.font.get_metadata) == "function"
+
   self.building = true
-  self.monospaced = false
+  self.monospaced = native_metadata
   self.loaded_fonts = {}
 
   core.log_quiet("Generating font cache...")
@@ -70,7 +72,9 @@ function FontCache:build()
       "Font cache generated in %.1fs for %s fonts!",
       system.get_time() - start_time, tostring(#self.fonts)
     )
-    this:verify_monospaced()
+    if not native_metadata then
+      this:verify_monospaced()
+    end
   end)
 end
 
@@ -87,8 +91,53 @@ function FontCache:scan_dir(path, run_count)
         -- prevent loading of duplicate files
         self.loaded_fonts[name] = true
         local font_path = path .. PATHSEP .. name
-        local read, errmsg = self.fontinfo:read(font_path)
-        if read then
+        local font, read, errmsg
+
+        if type(renderer.font.get_metadata) == "function" then
+          font, errmsg = renderer.font.get_metadata(font_path)
+        else
+          read, errmsg = self.fontinfo:read(font_path)
+        end
+
+
+        if font then
+          local add = true
+          local family = nil
+          if font.tfamily then
+            family = font.tfamily
+          elseif font.family then
+            family = font.family
+          end
+
+          local subfamily = nil
+          if font.tsubfamily then
+            subfamily = font.tsubfamily -- sometimes tsubfamily includes more styles
+          elseif font.subfamily then
+            subfamily = font.subfamily
+          end
+
+          -- fix font meta data or discard if empty
+          if family and subfamily then
+            font.fullname = family .. " " .. subfamily
+          elseif font.fullname and family and not font.fullname:ufind(family, 1, true) then
+            font.fullname = font.fullname .. " " .. family
+          elseif not font.fullname and family then
+            font.fullname = family
+          else
+            io.stderr:write(
+              "Error: " .. font_path .. "\n"
+              .. "   font metadata is empty\n"
+            )
+            add = false
+          end
+          if add then
+            if not font.monospace and font.fullname:find(" Mono", 1, true) then
+              font.monospace = true
+            end
+            font.path = font_path
+            table.insert(self.fonts, font)
+          end
+        elseif read then
           local font_data, errmsg = self.fontinfo:get_data()
           if font_data then
             table.insert(self.fonts, font_data)
